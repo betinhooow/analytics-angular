@@ -1,5 +1,5 @@
-import { Injectable } from '@angular/core';
-import { environment } from 'src/environments/environment';
+import { Injectable, NgZone } from '@angular/core';
+import { EventParams } from '../interfaces/analytics';
 
 declare let gtag: Function;
 
@@ -8,30 +8,30 @@ declare let gtag: Function;
 })
 export class GoogleAnalyticsService {
 
-  constructor() { }
+  constructor(private zone: NgZone) { }
 
   public eventEmitter(
-    eventName: string,
-    eventCategory: string,
-    eventAction: string,
-    eventLabel: string = null,
-    eventValue: number = null
+    action: string,
+    params?: EventParams
   ){
-    gtag('event', eventName, {
-      eventCategory: eventCategory,
-      'event_label': eventLabel,
-      eventAction: eventAction,
-      eventValue: eventValue
-    })
+    return this.zone.runOutsideAngular( () => new Promise( (resolve, reject) => {
+      try {
+        const tmr = setTimeout( () => reject( new Error('gtag call timed-out')), 10000 );
+
+        gtag('event', action, {
+          ...params,
+          event_callback: () => { clearTimeout(tmr); resolve(); }
+        })
+      }
+      catch(e) { reject(e); }
+    }));
   }
 
-  public pageViewEmitter(
-    pagePath: string,
-    pageTitle: string,
-  ){
-    gtag('config', environment.anaylitcsKey, {
-      'page_path': pagePath,
-      'page_title': pageTitle
-    });
+  public pageView(page_title?: string, page_path?: string, page_location?: string) {
+    return this.eventEmitter('page_view', { page_title, page_location, page_path });
+  }
+
+  public login(method?: string) {
+    return this.eventEmitter('login', { method });
   }
 }
